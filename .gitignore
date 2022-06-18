@@ -1,0 +1,4 @@
+build/*
+build-analysis/*
+imgui.ini
+scene.txt
