@@ -97,3 +97,22 @@ TEST_CASE("Aligned struct")
     REQUIRE(map.get(h0) == nullptr);
     REQUIRE(map.get(hcafe) == nullptr);
 }
+
+TEST_CASE("Stale handle")
+{
+    SlotMap<uint32_t> map;
+
+    auto h = map.insert(0xDEADCAFE);
+    map.remove(h);
+
+    // Burn through all generations for all handles in the initial allocation
+    // with what seems like a safe margin
+    for (auto i = 0u; i < (2 * h.MAX_GENERATIONS) * SLOTMAP_INITIAL_SIZE; ++i)
+    {
+        auto nh = map.insert(0xC0FFEEEE + i);
+        REQUIRE(*map.get(nh) == 0xC0FFEEEE + i);
+        REQUIRE(map.get(h) == nullptr);
+        map.remove(nh);
+    }
+    REQUIRE(map.get(h) == nullptr);
+}
