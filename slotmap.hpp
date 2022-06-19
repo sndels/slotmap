@@ -8,7 +8,7 @@
 #include <queue>
 #include <vector>
 
-#ifndef SLOTMAP_PAGE_SIZE
+#ifndef SLOTMAP_INITIAL_SIZE
 #define SLOTMAP_INITIAL_SIZE 1024
 #endif
 
