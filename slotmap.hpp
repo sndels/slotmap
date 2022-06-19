@@ -82,7 +82,13 @@ template <typename T> SlotMap<T>::SlotMap()
 #endif
     assert(m_data != nullptr);
 
-    m_generations.resize(m_handle_count, 0);
+    m_generations.reserve(m_handle_count);
+
+    for (auto i = 0u; i < m_handle_count; ++i)
+    {
+        m_freelist.push(i);
+        m_generations.push_back(0);
+    }
 }
 
 template <typename T> SlotMap<T>::~SlotMap()
