@@ -33,6 +33,12 @@ template <typename T> class Handle
     : m_index{index}
     , m_generation{generation} {};
 
+    bool isValid() const
+    {
+        return m_index > 0 && m_index <= MAX_HANDLES &&
+               m_generation < MAX_GENERATIONS;
+    }
+
     uint32_t m_index : 24 {0};
     uint32_t m_generation : 8 {0};
 
@@ -91,13 +97,10 @@ template <typename T> SlotMap<T>::SlotMap()
 #endif
     assert(m_data != nullptr);
 
-    m_generations.reserve(m_handle_count);
+    m_generations.resize(m_handle_count, 0);
 
     for (auto i = 0u; i < m_handle_count; ++i)
-    {
         m_freelist.push(i);
-        m_generations.push_back(0);
-    }
 }
 
 template <typename T> SlotMap<T>::~SlotMap()
@@ -116,29 +119,48 @@ template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
 
     auto index = m_freelist.front();
     m_freelist.pop();
+    assert(index < m_handle_count);
     assert(m_generations[index] < Handle<T>::MAX_GENERATIONS);
 
     new (&m_data[index]) T{item};
 
-    return Handle<T>(index, m_generations[index]);
+    // Store index + 1 in handle to honor 0 being invalid
+    auto h = Handle<T>(index + 1, m_generations[index]);
+    assert(h.isValid());
+
+    return h;
 }
 
 template <typename T> void SlotMap<T>::remove(Handle<T> handle)
 {
-    m_data[handle.m_index].~T();
+#ifndef NDEBUG
+    if (!handle.isValid() || handle.m_index > m_handle_count)
+        return;
+#endif // NDEBUG
 
-    auto gen = ++m_generations[handle.m_index];
+    auto index = handle.m_index - 1;
+
+    m_data[index].~T();
+
+    auto gen = ++m_generations[index];
 
     if (gen < Handle<T>::MAX_GENERATIONS)
-        m_freelist.push(handle.m_index);
+        m_freelist.push(index);
     else
         m_dead_indices++;
 }
 
 template <typename T> T *SlotMap<T>::get(Handle<T> handle)
 {
-    if (handle.m_generation == m_generations[handle.m_index])
-        return &m_data[handle.m_index];
+#ifndef NDEBUG
+    if (!handle.isValid() || handle.m_index > m_handle_count)
+        return nullptr;
+#endif // NDEBUG
+
+    auto index = handle.m_index - 1;
+
+    if (handle.m_generation == m_generations[index])
+        return &m_data[index];
     else
         return nullptr;
 }
