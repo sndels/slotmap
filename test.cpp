@@ -1,38 +1,96 @@
+#include <catch2/catch_test_macros.hpp>
 #include <slotmap.hpp>
 
-#include <cassert>
-#include <cstdio>
-
-struct Blob
+TEST_CASE("Primitive")
 {
-    uint32_t data[4];
-};
+    SlotMap<uint32_t> map;
 
-struct NonTrivial
+    auto h0 = map.insert(0);
+    REQUIRE(*map.get(h0) == 0);
+
+    auto hcoffee = map.insert(0xC0FFEEEE);
+    REQUIRE(*map.get(h0) == 0);
+    REQUIRE(*map.get(hcoffee) == 0xC0FFEEEE);
+
+    map.remove(h0);
+    REQUIRE(map.get(h0) == nullptr);
+    REQUIRE(map.get(hcoffee) != nullptr);
+
+    map.remove(hcoffee);
+    REQUIRE(map.get(h0) == nullptr);
+    REQUIRE(map.get(hcoffee) == nullptr);
+}
+
+TEST_CASE("Struct")
 {
-    Blob data;
-};
+    struct Struct
+    {
+        uint32_t data0;
+        uint32_t data1;
+    };
 
-int main()
+    SlotMap<Struct> map;
+
+    auto h0 = map.insert(Struct{
+        .data0 = 0,
+        .data1 = 1,
+    });
+    REQUIRE(map.get(h0)->data0 == 0);
+    REQUIRE(map.get(h0)->data1 == 1);
+
+    auto hcafe = map.insert(Struct{
+        .data0 = 0xDEADCAFE,
+        .data1 = 0xC0FFEEEE,
+    });
+    REQUIRE(map.get(h0)->data0 == 0);
+    REQUIRE(map.get(h0)->data1 == 1);
+    REQUIRE(map.get(hcafe)->data0 == 0xDEADCAFE);
+    REQUIRE(map.get(hcafe)->data1 == 0xC0FFEEEE);
+
+    map.remove(h0);
+    REQUIRE(map.get(h0) == nullptr);
+    REQUIRE(map.get(hcafe) != nullptr);
+    map.remove(hcafe);
+    REQUIRE(map.get(h0) == nullptr);
+    REQUIRE(map.get(hcafe) == nullptr);
+}
+
+TEST_CASE("Aligned struct")
 {
-    SlotMap<uint32_t> map_u32;
-    auto h0 = map_u32.insert(0);
-    auto hC0FFEEEE = map_u32.insert(0xC0FFEEEE);
-    printf("h0 %u\n", *map_u32.get(h0));
-    printf("h1 0x%X\n", *map_u32.get(hC0FFEEEE));
-    map_u32.remove(h0);
-    map_u32.remove(hC0FFEEEE);
-    assert(map_u32.get(h0) == nullptr);
-    assert(map_u32.get(hC0FFEEEE) == nullptr);
+    struct alignas(16) Struct
+    {
+        uint32_t data0;
+        uint32_t data1;
+        uint32_t _pad[2];
+    };
+    REQUIRE(alignof(Struct) == 16);
 
-    SlotMap<NonTrivial> map_nontrivial;
-    NonTrivial nt;
-    nt.data.data[2] = 0xDEADCAFE;
-    auto hcafe = map_nontrivial.insert(nt);
-    nt.data.data[2] = 0xCAFEBABE;
-    auto hbabe = map_nontrivial.insert(nt);
-    printf("hcafe 0x%X\n", map_nontrivial.get(hcafe)->data.data[2]);
-    printf("hcafe 0x%X\n", map_nontrivial.get(hbabe)->data.data[2]);
+    SlotMap<Struct> map;
 
-    return 0;
+    auto h0 = map.insert(Struct{
+        .data0 = 0,
+        .data1 = 1,
+        ._pad = {0},
+    });
+    REQUIRE((uint64_t)map.get(h0) % 16 == 0);
+    REQUIRE(map.get(h0)->data0 == 0);
+    REQUIRE(map.get(h0)->data1 == 1);
+
+    auto hcafe = map.insert(Struct{
+        .data0 = 0xDEADCAFE,
+        .data1 = 0xC0FFEEEE,
+        ._pad = {0},
+    });
+    REQUIRE((uint64_t)map.get(hcafe) % 16 == 0);
+    REQUIRE(map.get(h0)->data0 == 0);
+    REQUIRE(map.get(h0)->data1 == 1);
+    REQUIRE(map.get(hcafe)->data0 == 0xDEADCAFE);
+    REQUIRE(map.get(hcafe)->data1 == 0xC0FFEEEE);
+
+    map.remove(h0);
+    REQUIRE(map.get(h0) == nullptr);
+    REQUIRE(map.get(hcafe) != nullptr);
+    map.remove(hcafe);
+    REQUIRE(map.get(h0) == nullptr);
+    REQUIRE(map.get(hcafe) == nullptr);
 }

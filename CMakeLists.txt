@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(slotmap)
 
+add_subdirectory(ext)
+
 add_library(slotmap INTERFACE ${CMAKE_CURRENT_LIST_DIR}/slotmap.hpp)
 
 target_include_directories(slotmap
@@ -50,4 +52,4 @@ else()
     )
 endif() # NOT MSVC
 
-target_link_libraries(slotmap_test PRIVATE slotmap)
+target_link_libraries(slotmap_test PRIVATE slotmap Catch2WithMain)
