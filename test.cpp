@@ -1,4 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
+
+#define SLOTMAP_INITIAL_SIZE 16
+#define SLOTMAP_MIN_AVAILABLE_HANDLES 8
 #include <slotmap.hpp>
 
 TEST_CASE("Primitive")
