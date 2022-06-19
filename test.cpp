@@ -129,6 +129,32 @@ TEST_CASE("Emplace ctor")
     REQUIRE(map.get(h0)->data1 == 0xC0FFEEEE + 2);
 }
 
+TEST_CASE("Remove dtor")
+{
+    static uint32_t dtor_val = 0;
+    class Struct
+    {
+      public:
+        Struct(uint32_t data0)
+        : data0{data0}
+        {
+        }
+
+        ~Struct() { dtor_val = data0 + 1; }
+
+        uint32_t data0;
+    };
+
+    SlotMap<Struct> map;
+
+    // Dtor is called
+    auto h0 = map.emplace(0xDEADCAFE);
+    REQUIRE(map.get(h0)->data0 == 0xDEADCAFE);
+    REQUIRE(dtor_val == 0);
+    map.remove(h0);
+    REQUIRE(dtor_val == 0xDEADCAFE + 1);
+}
+
 TEST_CASE("Stale handle")
 {
     SlotMap<uint32_t> map;
