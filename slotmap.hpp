@@ -15,6 +15,10 @@
 #ifndef SLOTMAP_MIN_AVAILABLE_HANDLES
 #define SLOTMAP_MIN_AVAILABLE_HANDLES 256
 #endif
+static_assert(
+    SLOTMAP_INITIAL_SIZE > SLOTMAP_MIN_AVAILABLE_HANDLES,
+    "Having less initial handles than the minimum available count causes extra "
+    "allocations");
 
 #define SLOTMAP_RESIZE_MULTIPLIER 2
 
