@@ -23,6 +23,9 @@
 template <typename T> class Handle
 {
   public:
+    static uint32_t const MAX_HANDLES = 0xFFFFFF;
+    static uint32_t const MAX_GENERATIONS = 0xFF;
+
     Handle() = default;
 
   private:
@@ -32,9 +35,6 @@ template <typename T> class Handle
 
     uint32_t m_index : 24 {0};
     uint32_t m_generation : 8 {0};
-
-    static uint32_t const MAX_HANDLES = 0xFFFFFF;
-    static uint32_t const MAX_GENERATIONS = 0xFF;
 
     template <typename U> friend class SlotMap;
 };
