@@ -12,13 +12,11 @@
 #define SLOTMAP_INITIAL_SIZE 1024
 #endif
 
-#ifndef SLOTMAP_RESIZE_MULTIPLIER
-#define SLOTMAP_RESIZE_MULTIPLIER 2
-#endif
-
 #ifndef SLOTMAP_MIN_AVAILABLE_HANDLES
 #define SLOTMAP_MIN_AVAILABLE_HANDLES 256
 #endif
+
+#define SLOTMAP_RESIZE_MULTIPLIER 2
 
 template <typename T> class Handle
 {
