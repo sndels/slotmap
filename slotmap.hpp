@@ -65,6 +65,10 @@ template <typename T> class SlotMap
     // Will reallocate more space if less than SLOTMAP_MIN_AVAILABLE_HANDLES are
     // available internally.
     Handle<T> insert(T const &item);
+    // Constructs a new item in the map in-place, returning a handle for it.
+    // Will reallocate more space if less than SLOTMAP_MIN_AVAILABLE_HANDLES are
+    // available internally.
+    template <typename... Args> Handle<T> emplace(Args const &...args);
 
     // Removes the handle from the map, invalidating it.
     void remove(Handle<T> handle);
@@ -133,6 +137,27 @@ template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
     assert(m_generations[index] < Handle<T>::MAX_GENERATIONS);
 
     new (&m_data[index]) T{item};
+
+    // Store index + 1 in handle to honor 0 being invalid
+    auto h = Handle<T>(index + 1, m_generations[index]);
+    assert(h.isValid());
+
+    return h;
+}
+
+template <typename T>
+template <typename... Args>
+Handle<T> SlotMap<T>::emplace(Args const &...args)
+{
+    if (needNewHandles())
+        resize();
+
+    auto index = m_freelist.front();
+    m_freelist.pop();
+    assert(index < m_handle_count);
+    assert(m_generations[index] < Handle<T>::MAX_GENERATIONS);
+
+    new (&m_data[index]) T{args...};
 
     // Store index + 1 in handle to honor 0 being invalid
     auto h = Handle<T>(index + 1, m_generations[index]);

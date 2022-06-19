@@ -98,6 +98,28 @@ TEST_CASE("Aligned struct")
     REQUIRE(map.get(hcafe) == nullptr);
 }
 
+TEST_CASE("Emplace ctor")
+{
+    class Struct
+    {
+      public:
+        Struct(uint32_t data0, uint32_t data1)
+        : data0{data0 + 1}
+        , data1{data1 + 2} {};
+
+        Struct(Struct const &) = delete;
+
+        uint32_t data0;
+        uint32_t data1;
+    };
+
+    SlotMap<Struct> map;
+
+    auto h0 = map.emplace(0xDEADCAFE, 0xC0FFEEEE);
+    REQUIRE(map.get(h0)->data0 == 0xDEADCAFE + 1);
+    REQUIRE(map.get(h0)->data1 == 0xC0FFEEEE + 2);
+}
+
 TEST_CASE("Stale handle")
 {
     SlotMap<uint32_t> map;
