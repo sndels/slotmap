@@ -23,7 +23,9 @@
 template <typename T> class Handle
 {
   public:
+    // 24 bits, 0 is not a valid index
     static uint32_t const MAX_HANDLES = 0xFFFFFF;
+    // 8 bits, 0xFF marks an exhausted handle
     static uint32_t const MAX_GENERATIONS = 0xFF;
 
     Handle() = default;
@@ -39,7 +41,10 @@ template <typename T> class Handle
                m_generation < MAX_GENERATIONS;
     }
 
+    // The default index of 0 is not a valid handle
+    // As such, index + 1 should be stored for valid ones
     uint32_t m_index : 24 {0};
+    // Value of MAX_GENERATIONS marks an exhausted handle
     uint32_t m_generation : 8 {0};
 
     template <typename U> friend class SlotMap;
