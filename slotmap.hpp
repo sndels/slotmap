@@ -43,12 +43,21 @@ static_assert(sizeof(Handle<uint8_t>) == sizeof(uint32_t));
 template <typename T> class SlotMap
 {
   public:
+    // Creates a new slotmap for T with pre-allocated memory for
+    // SLOTMAP_INITIAL_SIZE items
     SlotMap();
     ~SlotMap();
 
+    // Inserts a new item into the map, returning a handle for it.
+    // Will reallocate more space if less than SLOTMAP_MIN_AVAILABLE_HANDLES are
+    // available internally.
     Handle<T> insert(T const &item);
+
+    // Removes the handle from the map, invalidating it.
     void remove(Handle<T> handle);
 
+    // Returns a pointer to the item referenced by the handle, or nullptr if the
+    // handle is invalid.
     T *get(Handle<T> handle);
 
   private:
