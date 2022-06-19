@@ -71,6 +71,11 @@ template <typename T> class SlotMap
     // handle is invalid.
     T *get(Handle<T> handle);
 
+    // Returns the number of allocated items
+    uint32_t capacity() const;
+    // Returns the number of items with valid handles
+    uint32_t validCount() const;
+
   private:
     bool needNewHandles();
     void resize();
@@ -86,9 +91,7 @@ template <typename T> class SlotMap
     T *m_data{nullptr};
     std::vector<uint32_t> m_generations;
     std::queue<uint32_t> m_freelist;
-#ifndef NDEBUG
     uint32_t m_dead_indices{0};
-#endif // NDEBUG
 };
 
 template <typename T> SlotMap<T>::SlotMap()
@@ -168,6 +171,17 @@ template <typename T> T *SlotMap<T>::get(Handle<T> handle)
         return &m_data[index];
     else
         return nullptr;
+}
+
+template <typename T> uint32_t SlotMap<T>::capacity() const
+{
+    return m_handle_count;
+}
+
+template <typename T> uint32_t SlotMap<T>::validCount() const
+{
+    return capacity() - static_cast<uint32_t>(m_freelist.size()) -
+           m_dead_indices;
 }
 
 template <typename T> bool SlotMap<T>::needNewHandles()

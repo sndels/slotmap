@@ -106,13 +106,70 @@ TEST_CASE("Stale handle")
     map.remove(h);
 
     // Burn through all generations for all handles in the initial allocation
-    // with what seems like a safe margin
-    for (auto i = 0u; i < (2 * h.MAX_GENERATIONS) * SLOTMAP_INITIAL_SIZE; ++i)
+    // with what seems like a safe margin.
+    // This assumes that new handles aren't allocated until less than
+    // SLOTMAP_MIN_AVAILABLE_HANDLES are available, and that removed handles are
+    // reused as FIFO.
+    for (auto i = 0u; i < (h.MAX_GENERATIONS + 1) * SLOTMAP_INITIAL_SIZE; ++i)
     {
         auto nh = map.insert(0xC0FFEEEE + i);
         REQUIRE(*map.get(nh) == 0xC0FFEEEE + i);
         REQUIRE(map.get(h) == nullptr);
         map.remove(nh);
     }
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE * SLOTMAP_RESIZE_MULTIPLIER);
     REQUIRE(map.get(h) == nullptr);
+}
+
+TEST_CASE("Size methods")
+{
+    SlotMap<uint32_t> map;
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE);
+    REQUIRE(map.validCount() == 0);
+
+    auto h = map.insert(0);
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE);
+    REQUIRE(map.validCount() == 1);
+
+    map.remove(h);
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE);
+    REQUIRE(map.validCount() == 0);
+}
+
+TEST_CASE("Dead handle size methods")
+{
+    SlotMap<uint32_t> map;
+
+    auto h = map.insert(0xDEADCAFE);
+    map.remove(h);
+
+    // Burn through all generations for all handles in the initial allocation
+    for (auto i = 0u; i < h.MAX_GENERATIONS * SLOTMAP_INITIAL_SIZE; ++i)
+        map.remove(map.insert(0));
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE * SLOTMAP_RESIZE_MULTIPLIER);
+    REQUIRE(map.validCount() == 0);
+
+    for (auto i = 0u; i < SLOTMAP_MIN_AVAILABLE_HANDLES; ++i)
+        map.insert(0);
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE * SLOTMAP_RESIZE_MULTIPLIER);
+    REQUIRE(map.validCount() == SLOTMAP_MIN_AVAILABLE_HANDLES);
+}
+
+TEST_CASE("Reallocation behavior")
+{
+    SlotMap<uint32_t> map;
+
+    for (auto i = 0u; i <= SLOTMAP_INITIAL_SIZE - SLOTMAP_MIN_AVAILABLE_HANDLES;
+         ++i)
+        map.insert(0);
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE);
+    REQUIRE(
+        map.validCount() ==
+        SLOTMAP_INITIAL_SIZE - SLOTMAP_MIN_AVAILABLE_HANDLES + 1);
+
+    map.insert(0);
+    REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE * SLOTMAP_RESIZE_MULTIPLIER);
+    REQUIRE(
+        map.validCount() ==
+        SLOTMAP_INITIAL_SIZE - SLOTMAP_MIN_AVAILABLE_HANDLES + 2);
 }
