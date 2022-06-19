@@ -103,6 +103,10 @@ template <typename T> class SlotMap
     // of stable pointers is a bit dubious since their generation might change
     // between accesses, effectively invalidating them anyway.
     T *m_data{nullptr};
+    // TODO
+    // Could avoid dependencies to vector and queue here pretty easily. We only
+    // need a resizeable uint32_t array and a uint32_t queue with queryable
+    // size.
     std::vector<uint32_t> m_generations;
     std::queue<uint32_t> m_freelist;
     uint32_t m_dead_indices{0};
