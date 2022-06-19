@@ -32,6 +32,14 @@ template <typename T> class Handle
 
     Handle() = default;
 
+    bool operator==(Handle<T> other) const
+    {
+        return *(reinterpret_cast<uint32_t const *>(this)) ==
+               *(reinterpret_cast<uint32_t const *>(&other));
+    }
+
+    bool operator!=(Handle<T> other) const { return !(*this == other); }
+
   private:
     Handle(uint32_t index, uint32_t generation)
     : m_index{index}

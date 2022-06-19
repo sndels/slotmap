@@ -195,3 +195,18 @@ TEST_CASE("Reallocation behavior")
         map.validCount() ==
         SLOTMAP_INITIAL_SIZE - SLOTMAP_MIN_AVAILABLE_HANDLES + 2);
 }
+
+TEST_CASE("Handle equality")
+{
+    REQUIRE(Handle<uint32_t>() == Handle<uint32_t>());
+
+    SlotMap<uint32_t> map;
+    auto h0 = map.insert(0xCAFEBABE);
+    REQUIRE(h0 != Handle<uint32_t>());
+
+    auto hcopy = h0;
+    REQUIRE(hcopy == h0);
+
+    auto h1 = map.insert(0xDEADCAFE);
+    REQUIRE(h1 != h0);
+}
