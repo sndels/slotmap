@@ -10,7 +10,7 @@ target_include_directories(slotmap
     ${CMAKE_CURRENT_LIST_DIR}
 )
 
-add_executable(slotmap_test ${CMAKE_CURRENT_LIST_DIR}/test.cpp)
+add_executable(slotmap_test ${CMAKE_CURRENT_LIST_DIR}/test.cpp ${CMAKE_CURRENT_LIST_DIR}/bench.cpp )
 target_compile_features(slotmap_test
     PUBLIC
     cxx_std_20
