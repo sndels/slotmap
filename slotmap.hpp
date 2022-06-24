@@ -69,6 +69,32 @@ template <typename T> class SlotMap
     SlotMap();
     ~SlotMap();
 
+    SlotMap(SlotMap const &) = delete;
+    SlotMap &operator=(SlotMap const &) = delete;
+
+    SlotMap(SlotMap &&other)
+    : m_data{other.m_data}
+    , m_generations{std::move(other.m_generations)}
+    , m_freelist{std::move(other.m_freelist)}
+    , m_dead_indices{other.m_dead_indices}
+    {
+        other.m_data = nullptr;
+    }
+
+    SlotMap &operator=(SlotMap &&other)
+    {
+        if (this != &other)
+        {
+            m_data = other.m_data;
+            m_generations = std::move(other.m_generations);
+            m_freelist = std::move(other.m_freelist);
+            m_dead_indices = other.m_dead_indices;
+
+            other.m_data = nullptr;
+        }
+        return *this;
+    }
+
     // Inserts a new item into the map, returning a handle for it.
     // Will reallocate more space if less than SLOTMAP_MIN_AVAILABLE_HANDLES are
     // available internally.
