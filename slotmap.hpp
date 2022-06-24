@@ -114,13 +114,7 @@ template <typename T> class SlotMap
 
 template <typename T> SlotMap<T>::SlotMap()
 {
-#ifdef WIN32
-    m_data = reinterpret_cast<T *>(
-        _aligned_malloc(sizeof(T) * m_handle_count, alignof(T)));
-#else
-    m_data = reinterpret_cast<T *>(
-        std::aligned_alloc(alignof(T), sizeof(T) * m_handle_count));
-#endif
+    m_data = reinterpret_cast<T *>(std::malloc(sizeof(T) * m_handle_count));
     assert(m_data != nullptr);
 
     m_generations.resize(m_handle_count, 0);
@@ -129,14 +123,7 @@ template <typename T> SlotMap<T>::SlotMap()
         m_freelist.push(i);
 }
 
-template <typename T> SlotMap<T>::~SlotMap()
-{
-#ifdef WIN32
-    _aligned_free(m_data);
-#else
-    free(m_data);
-#endif
-}
+template <typename T> SlotMap<T>::~SlotMap() { std::free(m_data); }
 
 template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
 {
@@ -237,20 +224,9 @@ template <typename T> void SlotMap<T>::resize()
     m_handle_count *= SLOTMAP_RESIZE_MULTIPLIER;
     assert(m_handle_count <= Handle<T>::MAX_HANDLES);
 
-#ifdef WIN32
-    m_data = reinterpret_cast<T *>(
-        _aligned_realloc(m_data, sizeof(T) * m_handle_count, alignof(T)));
+    m_data =
+        reinterpret_cast<T *>(std::realloc(m_data, sizeof(T) * m_handle_count));
     assert(m_data != nullptr);
-#else
-    auto *new_data = reinterpret_cast<T *>(
-        aligned_alloc(alignof(T), sizeof(T) * m_handle_count));
-    assert(new_data != nullptr);
-
-    memcpy(new_data, m_data, sizeof(T) * old_handle_count);
-    free(m_data);
-
-    m_data = new_data;
-#endif
 
     m_generations.reserve(m_handle_count);
 
