@@ -84,6 +84,44 @@
             "problemMatcher": "$msCompile"
         },
         {
+            "label": "Make (Debug)",
+            "type": "shell",
+            "dependsOn": [
+                "cmake debug"
+            ],
+            "command": "make",
+            "args": [
+                "-j",
+                "slotmap_test"
+            ],
+            "group": "build",
+            "presentation": {
+                // Reveal the output only if unrecognized errors occur.
+                "reveal": "never"
+            },
+            "options": {
+                "cwd": "${workspaceRoot}/build",
+            },
+            // Use the standard MS compiler pattern to detect errors, warnings and infos
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "cmake debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-DCMAKE_BUILD_TYPE=DEBUG",
+                ".."
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}/build"
+            },
+            "presentation": {
+                // Reveal the output only if unrecognized errors occur.
+                "reveal": "silent"
+            }
+        },
+        {
             "label": "cmake",
             "type": "shell",
             "command": "cmake",
