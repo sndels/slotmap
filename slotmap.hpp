@@ -43,7 +43,11 @@ template <typename T> class Handle
   private:
     Handle(uint32_t index, uint32_t generation)
     : m_index{index}
-    , m_generation{generation} {};
+    , m_generation{generation}
+    {
+        assert(m_index <= MAX_HANDLES);
+        assert(m_generation < MAX_GENERATIONS);
+    };
 
     bool isValid() const
     {
@@ -159,7 +163,6 @@ template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
     auto index = m_freelist.front();
     m_freelist.pop();
     assert(index < m_handle_count);
-    assert(m_generations[index] < Handle<T>::MAX_GENERATIONS);
 
     new (&m_data[index]) T{item};
 
@@ -180,7 +183,6 @@ Handle<T> SlotMap<T>::emplace(Args const &...args)
     auto index = m_freelist.front();
     m_freelist.pop();
     assert(index < m_handle_count);
-    assert(m_generations[index] < Handle<T>::MAX_GENERATIONS);
 
     new (&m_data[index]) T{args...};
 
