@@ -29,7 +29,31 @@
             "preLaunchTask": "MSBuild (Debug)"
         },
         {
-            "name": "Make (Debug)",
+            "name": "lldb tests (Debug)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/slotmap_test",
+            "args": [
+                "[test]"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "preLaunchTask": "Make (Debug)"
+        },
+        {
+            "name": "lldb bench (Debug)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/slotmap_test",
+            "args": [
+                "[bench]"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "preLaunchTask": "Make (Debug)"
+        },
+        {
+            "name": "lldb all (Debug)",
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/slotmap_test",

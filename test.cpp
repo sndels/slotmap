@@ -4,7 +4,7 @@
 #define SLOTMAP_MIN_AVAILABLE_HANDLES 8
 #include <slotmap.hpp>
 
-TEST_CASE("Primitive (insert)")
+TEST_CASE("Primitive (insert)", "[test]")
 {
     SlotMap<uint32_t> map;
 
@@ -49,7 +49,7 @@ TEST_CASE("Primitive (insert)")
     }
 }
 
-TEST_CASE("Struct")
+TEST_CASE("Struct", "[test]")
 {
     struct Struct
     {
@@ -112,7 +112,7 @@ TEST_CASE("Struct")
     }
 }
 
-TEST_CASE("Aligned struct")
+TEST_CASE("Aligned struct", "[test]")
 {
     struct alignas(16) Struct
     {
@@ -186,7 +186,7 @@ TEST_CASE("Aligned struct")
     }
 }
 
-TEST_CASE("Remove dtor")
+TEST_CASE("Remove dtor", "[test]")
 {
     class Struct
     {
@@ -228,7 +228,7 @@ TEST_CASE("Remove dtor")
     }
 }
 
-TEST_CASE("Stale handle")
+TEST_CASE("Stale handle", "[test]")
 {
     SlotMap<uint32_t> map;
 
@@ -301,7 +301,7 @@ TEST_CASE("Stale handle")
     }
 }
 
-TEST_CASE("Size methods")
+TEST_CASE("Size methods", "[test]")
 {
     SlotMap<uint32_t> map;
     REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE);
@@ -330,7 +330,7 @@ TEST_CASE("Size methods")
     }
 }
 
-TEST_CASE("Dead handle size methods")
+TEST_CASE("Dead handle size methods", "[test]")
 {
     SlotMap<uint32_t> map;
 
@@ -385,7 +385,7 @@ TEST_CASE("Dead handle size methods")
     }
 }
 
-TEST_CASE("Reallocation behavior")
+TEST_CASE("Reallocation behavior", "[test]")
 {
     SlotMap<uint32_t> map;
 
@@ -432,7 +432,7 @@ TEST_CASE("Reallocation behavior")
     }
 }
 
-TEST_CASE("Handle equality")
+TEST_CASE("Handle equality", "[test]")
 {
     // Null handles should match
     REQUIRE(Handle<uint32_t>() == Handle<uint32_t>());

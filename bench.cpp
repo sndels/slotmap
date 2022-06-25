@@ -30,7 +30,7 @@ class Obj
     uint8_t m_data[DATA_BYTES];
 };
 
-TEST_CASE("Bench")
+TEST_CASE("Bench", "[bench]")
 {
     const uint32_t object_count = GENERATE(256, 1024, 4096, 16384, 65536);
 
