@@ -32,8 +32,7 @@ class Obj
 
 TEST_CASE("Bench")
 {
-    const uint32_t object_count =
-        GENERATE(128, 256, 512, 1024, 2048, 8128, 16384);
+    const uint32_t object_count = GENERATE(256, 1024, 4096, 16384, 65536);
 
     SECTION("SlotMap")
     {
