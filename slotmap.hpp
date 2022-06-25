@@ -74,31 +74,8 @@ template <typename T> class SlotMap
 
     SlotMap(SlotMap const &) = delete;
     SlotMap &operator=(SlotMap const &) = delete;
-
-    SlotMap(SlotMap &&other)
-    : m_data{other.m_data}
-    , m_generations{other.m_generations}
-    , m_freelist{std::move(other.m_freelist)}
-    , m_dead_indices{other.m_dead_indices}
-    {
-        other.m_data = nullptr;
-        other.m_generations = nullptr;
-    }
-
-    SlotMap &operator=(SlotMap &&other)
-    {
-        if (this != &other)
-        {
-            m_data = other.m_data;
-            m_generations = other.m_generations;
-            m_freelist = std::move(other.m_freelist);
-            m_dead_indices = other.m_dead_indices;
-
-            other.m_data = nullptr;
-            other.m_generations = nullptr;
-        }
-        return *this;
-    }
+    SlotMap(SlotMap &&other);
+    SlotMap &operator=(SlotMap &&other);
 
     // Inserts a new item into the map, returning a handle for it.
     // Will reallocate more space if less than SLOTMAP_MIN_AVAILABLE_HANDLES are
@@ -159,6 +136,32 @@ template <typename T> SlotMap<T>::~SlotMap()
 {
     std::free(m_data);
     std::free(m_generations);
+}
+
+template <typename T>
+SlotMap<T>::SlotMap(SlotMap<T> &&other)
+: m_data{other.m_data}
+, m_generations{other.m_generations}
+, m_freelist{std::move(other.m_freelist)}
+, m_dead_indices{other.m_dead_indices}
+{
+    other.m_data = nullptr;
+    other.m_generations = nullptr;
+}
+
+template <typename T> SlotMap<T> &SlotMap<T>::operator=(SlotMap<T> &&other)
+{
+    if (this != &other)
+    {
+        m_data = other.m_data;
+        m_generations = other.m_generations;
+        m_freelist = std::move(other.m_freelist);
+        m_dead_indices = other.m_dead_indices;
+
+        other.m_data = nullptr;
+        other.m_generations = nullptr;
+    }
+    return *this;
 }
 
 template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
