@@ -4,6 +4,8 @@
 #define SLOTMAP_MIN_AVAILABLE_HANDLES 8
 #include <slotmap.hpp>
 
+#include <vector>
+
 TEST_CASE("Primitive (insert)", "[test]")
 {
     SlotMap<uint32_t> map;

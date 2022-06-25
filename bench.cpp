@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <unordered_map>
+#include <vector>
 
 static std::atomic<uint64_t> side_effect = 0;
 

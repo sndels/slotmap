@@ -6,7 +6,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <queue>
-#include <vector>
 
 #ifndef SLOTMAP_INITIAL_SIZE
 #define SLOTMAP_INITIAL_SIZE 1024
@@ -78,11 +77,12 @@ template <typename T> class SlotMap
 
     SlotMap(SlotMap &&other)
     : m_data{other.m_data}
-    , m_generations{std::move(other.m_generations)}
+    , m_generations{other.m_generations}
     , m_freelist{std::move(other.m_freelist)}
     , m_dead_indices{other.m_dead_indices}
     {
         other.m_data = nullptr;
+        other.m_generations = nullptr;
     }
 
     SlotMap &operator=(SlotMap &&other)
@@ -90,11 +90,12 @@ template <typename T> class SlotMap
         if (this != &other)
         {
             m_data = other.m_data;
-            m_generations = std::move(other.m_generations);
+            m_generations = other.m_generations;
             m_freelist = std::move(other.m_freelist);
             m_dead_indices = other.m_dead_indices;
 
             other.m_data = nullptr;
+            other.m_generations = nullptr;
         }
         return *this;
     }
@@ -133,11 +134,11 @@ template <typename T> class SlotMap
     // of stable pointers is a bit dubious since their generation might change
     // between accesses, effectively invalidating them anyway.
     T *m_data{nullptr};
+    uint32_t *m_generations{nullptr};
     // TODO
-    // Could avoid dependencies to vector and queue here pretty easily. We only
-    // need a resizeable uint32_t array and a uint32_t queue with queryable
-    // size.
-    std::vector<uint32_t> m_generations;
+    // Could avoid dependency to queue here pretty easily. We only need a
+    // uint32_t queue with queryable size. Could maybe even use a ring buffer as
+    // the size of the freelist would be at most that of the generations array.
     std::queue<uint32_t> m_freelist;
     uint32_t m_dead_indices{0};
 };
@@ -146,14 +147,19 @@ template <typename T> SlotMap<T>::SlotMap()
 {
     m_data = reinterpret_cast<T *>(std::malloc(sizeof(T) * m_handle_count));
     assert(m_data != nullptr);
-
-    m_generations.resize(m_handle_count, 0);
+    m_generations = reinterpret_cast<uint32_t *>(
+        std::calloc(m_handle_count, sizeof(uint32_t)));
+    assert(m_generations != nullptr);
 
     for (auto i = 0u; i < m_handle_count; ++i)
         m_freelist.push(i);
 }
 
-template <typename T> SlotMap<T>::~SlotMap() { std::free(m_data); }
+template <typename T> SlotMap<T>::~SlotMap()
+{
+    std::free(m_data);
+    std::free(m_generations);
+}
 
 template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
 {
@@ -256,13 +262,16 @@ template <typename T> void SlotMap<T>::resize()
         reinterpret_cast<T *>(std::realloc(m_data, sizeof(T) * m_handle_count));
     assert(m_data != nullptr);
 
-    m_generations.reserve(m_handle_count);
+    m_generations = reinterpret_cast<uint32_t *>(
+        std::realloc(m_generations, sizeof(uint32_t) * m_handle_count));
+    assert(m_generations != nullptr);
+
+    std::memset(
+        m_generations + old_handle_count, 0x0,
+        sizeof(uint32_t) * (m_handle_count - old_handle_count));
 
     for (auto i = old_handle_count; i < m_handle_count; ++i)
-    {
         m_freelist.push(i);
-        m_generations.push_back(0);
-    }
 }
 
 #endif // SLOTMAP_HPP
