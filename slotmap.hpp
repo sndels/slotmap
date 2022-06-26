@@ -7,18 +7,6 @@
 #include <cstring>
 #include <queue>
 
-#ifndef SLOTMAP_INITIAL_SIZE
-#define SLOTMAP_INITIAL_SIZE 1024
-#endif
-
-#ifndef SLOTMAP_MIN_AVAILABLE_HANDLES
-#define SLOTMAP_MIN_AVAILABLE_HANDLES 256
-#endif
-static_assert(
-    SLOTMAP_INITIAL_SIZE > SLOTMAP_MIN_AVAILABLE_HANDLES,
-    "Having less initial handles than the minimum available count causes extra "
-    "allocations");
-
 #define SLOTMAP_RESIZE_MULTIPLIER 2
 
 template <typename T> class Handle
@@ -68,8 +56,10 @@ template <typename T> class SlotMap
 {
   public:
     // Creates a new slotmap for T with pre-allocated memory for
-    // SLOTMAP_INITIAL_SIZE items
-    SlotMap();
+    // 'initial_capacity' items
+    SlotMap(
+        uint32_t initial_capacity = 1024,
+        uint32_t minimum_available_handles = 256);
     ~SlotMap();
 
     SlotMap(SlotMap const &) = delete;
@@ -78,11 +68,11 @@ template <typename T> class SlotMap
     SlotMap &operator=(SlotMap &&other);
 
     // Inserts a new item into the map, returning a handle for it.
-    // Will reallocate more space if less than SLOTMAP_MIN_AVAILABLE_HANDLES are
+    // Will reallocate more space if less than 'minimum_available_handles' are
     // available internally.
     Handle<T> insert(T const &item);
     // Constructs a new item in the map in-place, returning a handle for it.
-    // Will reallocate more space if less than SLOTMAP_MIN_AVAILABLE_HANDLES are
+    // Will reallocate more space if less than 'minimum_available_handles' are
     // available internally.
     template <typename... Args> Handle<T> emplace(Args const &...args);
 
@@ -102,7 +92,8 @@ template <typename T> class SlotMap
     bool needNewHandles();
     void resize();
 
-    uint32_t m_handle_count{SLOTMAP_INITIAL_SIZE};
+    uint32_t m_handle_count{0};
+    uint32_t m_minimum_queue_handles{0};
     // Having a single allocation that's resized makes accessing elements
     // simple, but will make it impossible to free dead chunks of memory within
     // the allocation (except from the start).
@@ -120,8 +111,18 @@ template <typename T> class SlotMap
     uint32_t m_dead_indices{0};
 };
 
-template <typename T> SlotMap<T>::SlotMap()
+template <typename T>
+SlotMap<T>::SlotMap(
+    uint32_t initial_capacity, uint32_t minimum_available_handles)
+: m_handle_count{initial_capacity}
+, m_minimum_queue_handles{minimum_available_handles}
 {
+    assert(m_handle_count > 0);
+    assert(
+        m_handle_count > m_minimum_queue_handles &&
+        "Having less initial handles than the "
+        "minimum available count causes extra "
+        "allocations");
     m_data = reinterpret_cast<T *>(std::malloc(sizeof(T) * m_handle_count));
     assert(m_data != nullptr);
     m_generations = reinterpret_cast<uint32_t *>(
@@ -140,7 +141,9 @@ template <typename T> SlotMap<T>::~SlotMap()
 
 template <typename T>
 SlotMap<T>::SlotMap(SlotMap<T> &&other)
-: m_data{other.m_data}
+: m_handle_count{other.m_handle_count}
+, m_minimum_queue_handles{other.m_minimum_queue_handles}
+, m_data{other.m_data}
 , m_generations{other.m_generations}
 , m_freelist{std::move(other.m_freelist)}
 , m_dead_indices{other.m_dead_indices}
@@ -153,6 +156,8 @@ template <typename T> SlotMap<T> &SlotMap<T>::operator=(SlotMap<T> &&other)
 {
     if (this != &other)
     {
+        m_handle_count = other.m_handle_count;
+        m_minimum_queue_handles = other.m_minimum_queue_handles;
         m_data = other.m_data;
         m_generations = other.m_generations;
         m_freelist = std::move(other.m_freelist);
@@ -252,7 +257,7 @@ template <typename T> bool SlotMap<T>::needNewHandles()
     // Pick a minimum number of handles in freelist to avoid burning through
     // them in worst case insert/remove patterns
     // https://twitter.com/dotstdy/status/1536629439961763842?s=20&t=IGuxyH4zxjkunDESRHAXDg
-    return m_freelist.size() < SLOTMAP_MIN_AVAILABLE_HANDLES;
+    return m_freelist.size() < m_minimum_queue_handles;
 }
 
 template <typename T> void SlotMap<T>::resize()
