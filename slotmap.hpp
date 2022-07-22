@@ -12,9 +12,9 @@
 template <typename T> class Handle
 {
   public:
-    // 24 bits, 0 is not a valid index
+    // 24 bits
     static uint32_t const MAX_HANDLES = 0xFFFFFF;
-    // 8 bits, 0xFF marks an exhausted handle
+    // 8 bits
     static uint32_t const MAX_GENERATIONS = 0xFF;
 
     Handle() = default;
@@ -32,21 +32,19 @@ template <typename T> class Handle
     : m_index{index}
     , m_generation{generation}
     {
-        assert(m_index <= MAX_HANDLES);
+        assert(m_index < MAX_HANDLES);
         assert(m_generation < MAX_GENERATIONS);
     };
 
     bool isValid() const
     {
-        return m_index > 0 && m_index <= MAX_HANDLES &&
-               m_generation < MAX_GENERATIONS;
+        return m_index < MAX_HANDLES && m_generation < MAX_GENERATIONS;
     }
 
     // The default index of 0 is not a valid handle
-    // As such, index + 1 should be stored for valid ones
-    uint32_t m_index : 24 {0};
+    uint32_t m_index : 24 {MAX_HANDLES};
     // Value of MAX_GENERATIONS marks an exhausted handle
-    uint32_t m_generation : 8 {0};
+    uint32_t m_generation : 8 {MAX_GENERATIONS};
 
     template <typename U> friend class SlotMap;
 };
@@ -180,8 +178,7 @@ template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
 
     new (&m_data[index]) T{item};
 
-    // Store index + 1 in handle to honor 0 being invalid
-    auto h = Handle<T>(index + 1, m_generations[index]);
+    auto h = Handle<T>(index, m_generations[index]);
     assert(h.isValid());
 
     return h;
@@ -200,8 +197,7 @@ Handle<T> SlotMap<T>::emplace(Args const &...args)
 
     new (&m_data[index]) T{args...};
 
-    // Store index + 1 in handle to honor 0 being invalid
-    auto h = Handle<T>(index + 1, m_generations[index]);
+    auto h = Handle<T>(index, m_generations[index]);
     assert(h.isValid());
 
     return h;
@@ -214,7 +210,7 @@ template <typename T> void SlotMap<T>::remove(Handle<T> handle)
         return;
 #endif // NDEBUG
 
-    auto index = handle.m_index - 1;
+    auto index = handle.m_index;
 
     m_data[index].~T();
 
@@ -233,7 +229,7 @@ template <typename T> T *SlotMap<T>::get(Handle<T> handle)
         return nullptr;
 #endif // NDEBUG
 
-    auto index = handle.m_index - 1;
+    auto index = handle.m_index;
 
     if (handle.m_generation == m_generations[index])
         return &m_data[index];
