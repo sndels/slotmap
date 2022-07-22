@@ -11,14 +11,6 @@
 
 static std::atomic<uint64_t> side_effect = 0;
 
-struct PoD
-{
-    uint64_t data0;
-    uint64_t data1;
-    uint64_t data2;
-    uint64_t data3;
-};
-
 class Obj
 {
   public:
