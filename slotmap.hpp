@@ -50,6 +50,29 @@ template <typename T> class Handle
 };
 static_assert(sizeof(Handle<uint8_t>) == sizeof(uint32_t));
 
+class FreeList
+{
+  public:
+    FreeList(uint32_t initial_capacity = 1024);
+    ~FreeList();
+
+    FreeList(FreeList const &other) = delete;
+    FreeList &operator=(FreeList const &other) = delete;
+    FreeList(FreeList &&other);
+    FreeList &operator=(FreeList &&other);
+
+    void push(uint32_t index);
+    uint32_t pop();
+    bool empty() const;
+    size_t size() const;
+
+  private:
+    uint32_t *m_buffer{nullptr};
+    size_t m_capacity{0};
+    uint32_t m_head{0};
+    uint32_t m_tail{0};
+};
+
 template <typename T> class SlotMap
 {
   public:
@@ -108,6 +131,103 @@ template <typename T> class SlotMap
     std::queue<uint32_t> m_freelist;
     uint32_t m_dead_indices{0};
 };
+
+inline FreeList::FreeList(uint32_t initial_capacity)
+: m_capacity{initial_capacity}
+{
+    m_buffer = reinterpret_cast<uint32_t *>(
+        std::malloc(sizeof(uint32_t) * m_capacity));
+    assert(m_buffer != nullptr);
+}
+
+inline FreeList::~FreeList() { std::free(m_buffer); }
+
+inline FreeList::FreeList(FreeList &&other)
+{
+    m_buffer = other.m_buffer;
+    m_capacity = other.m_capacity;
+    m_head = other.m_head;
+    m_tail = other.m_tail;
+
+    other.m_buffer = nullptr;
+}
+
+inline FreeList &FreeList::operator=(FreeList &&other)
+{
+    if (this != &other)
+    {
+        m_buffer = other.m_buffer;
+        m_capacity = other.m_capacity;
+        m_head = other.m_head;
+        m_tail = other.m_tail;
+
+        other.m_buffer = nullptr;
+    }
+    return *this;
+}
+
+inline void FreeList::push(uint32_t index)
+{
+    if (m_head == 0)
+    {
+        if (m_tail == m_capacity)
+        {
+            // Simple realloc
+            m_capacity *= SLOTMAP_RESIZE_MULTIPLIER;
+            m_buffer = reinterpret_cast<uint32_t *>(
+                std::realloc(m_buffer, m_capacity * sizeof(uint32_t)));
+            assert(m_buffer);
+        }
+    }
+    else if (m_tail == m_head - 1)
+    {
+        // Need to realloc and move wrapped entries to the back
+        // Since we multiply the capacity with an integer multiplier, all of
+        // the previous entries can be stored in one continuous block from
+        // head
+        auto old_size = m_capacity;
+        m_capacity *= SLOTMAP_RESIZE_MULTIPLIER;
+
+        m_buffer = reinterpret_cast<uint32_t *>(
+            std::realloc(m_buffer, m_capacity * sizeof(uint32_t)));
+        assert(m_buffer);
+
+        std::memcpy(&m_buffer[old_size], m_buffer, m_tail * sizeof(uint32_t));
+
+        // Real capacity is missing one element when tail < head to avoid
+        // invalid tail == head
+        m_tail = m_head + static_cast<uint32_t>(old_size) - 1;
+        assert(m_tail < m_capacity);
+    }
+
+    if (m_tail == m_capacity)
+        m_tail = 0;
+
+    m_buffer[m_tail++] = index;
+}
+
+inline uint32_t FreeList::pop()
+{
+    assert(!empty());
+    auto ret = m_buffer[m_head++];
+    if (m_head >= m_capacity)
+    {
+        m_head = 0;
+        if (m_tail >= m_capacity)
+            m_tail = 0;
+    }
+    return ret;
+}
+
+inline bool FreeList::empty() const { return m_head == m_tail; }
+
+inline size_t FreeList::size() const
+{
+    if (m_tail < m_head)
+        return m_tail + m_capacity - m_head;
+    else
+        return m_tail - m_head;
+}
 
 template <typename T>
 SlotMap<T>::SlotMap(

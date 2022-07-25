@@ -503,3 +503,98 @@ TEST_CASE("Handle equality", "[test]")
         REQUIRE(h1 != h0);
     }
 }
+
+TEST_CASE("FreeList push/pop simple", "[test]")
+{
+    FreeList list{SLOTMAP_INITIAL_SIZE};
+    REQUIRE(list.empty());
+
+    list.push(0xDEADCAFE);
+    REQUIRE(!list.empty());
+    REQUIRE(list.pop() == 0xDEADCAFE);
+    REQUIRE(list.empty());
+}
+
+TEST_CASE("FreeList size", "[test]")
+{
+    FreeList list{SLOTMAP_INITIAL_SIZE};
+    REQUIRE(list.empty());
+    REQUIRE(list.size() == 0);
+
+    const auto half_minus_one = SLOTMAP_INITIAL_SIZE / 2 - 1;
+
+    // head < tail
+    for (auto i = 0u; i < half_minus_one; ++i)
+        list.push(0);
+    REQUIRE(list.size() == half_minus_one);
+    for (auto i = 0u; i < half_minus_one; ++i)
+        list.push(0);
+    REQUIRE(list.size() == half_minus_one * 2);
+
+    // tail < head
+    for (auto i = 0u; i < half_minus_one; ++i)
+        list.pop();
+    REQUIRE(list.size() == half_minus_one);
+    for (auto i = 0u; i < half_minus_one; ++i)
+        list.push(0);
+    REQUIRE(list.size() == half_minus_one * 2);
+}
+
+TEST_CASE("FreeList push/pop tail<head", "[test]")
+{
+    FreeList list{SLOTMAP_INITIAL_SIZE};
+    REQUIRE(list.empty());
+
+    for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE / 2; ++i)
+    {
+        list.push(0xDEADCAFE);
+        list.pop();
+    }
+    REQUIRE(list.empty());
+    for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE / 2 - 1; ++i)
+        list.push(0xDEADCAFE + i);
+    for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE / 2 - 1; ++i)
+        list.push(0xC0FFEEEE + i);
+    for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE / 2 - 1; ++i)
+        REQUIRE(list.pop() == 0xDEADCAFE + i);
+    for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE / 2 - 1; ++i)
+        REQUIRE(list.pop() == 0xC0FFEEEE + i);
+    REQUIRE(list.empty());
+}
+
+TEST_CASE("FreeList resize", "[test]")
+{
+    FreeList list{SLOTMAP_INITIAL_SIZE};
+    REQUIRE(list.empty());
+
+    SECTION("Head 0, tail end")
+    {
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            list.push(0xDEADCAFE + i);
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            list.push(0xC0FFEEEE + i);
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            REQUIRE(list.pop() == 0xDEADCAFE + i);
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            REQUIRE(list.pop() == 0xC0FFEEEE + i);
+        REQUIRE(list.empty());
+    }
+
+    SECTION("Head middle, tail middle")
+    {
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE / 2; ++i)
+        {
+            list.push(0xCAFEBABE + i);
+            list.pop();
+        }
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            list.push(0xDEADCAFE + i);
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            list.push(0xC0FFEEEE + i);
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            REQUIRE(list.pop() == 0xDEADCAFE + i);
+        for (auto i = 0u; i < SLOTMAP_INITIAL_SIZE; ++i)
+            REQUIRE(list.pop() == 0xC0FFEEEE + i);
+        REQUIRE(list.empty());
+    }
+}
