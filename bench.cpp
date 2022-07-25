@@ -23,6 +23,7 @@ class Obj
 TEST_CASE("Bench", "[bench]")
 {
     // SlotMap won't reallocate during the first but will during the rest
+    // The final one will also reallocate the internal page array
     const uint32_t object_count = GENERATE(512, 2048, 8096, 65536);
 
     SECTION("SlotMap")

@@ -128,12 +128,10 @@ template <typename T> class PageArray
 template <typename T> class SlotMap
 {
   public:
-    // Creates a new slotmap for T with pre-allocated memory for
-    // 'initial_capacity' items
+    // Creates a new slotmap with a single page allocated
     SlotMap(
-        uint32_t initial_capacity = 1024,
+        PowerOfTwo items_in_page = PowerOfTwo::e1024,
         uint32_t minimum_available_handles = 256);
-    ~SlotMap();
 
     SlotMap(SlotMap const &) = delete;
     SlotMap &operator=(SlotMap const &) = delete;
@@ -162,21 +160,17 @@ template <typename T> class SlotMap
     uint32_t validCount() const;
 
   private:
-    void destroy();
-    bool needNewHandles();
-    void resize();
+    uint32_t getFreeIndex();
 
-    uint32_t m_handle_count{0};
+    // Page based allocation makes resizing much faster than reallocation when
+    // the held memory creeps up in size. It also has the added bonus that
+    // previously allocated objects won't move in memory, but that's probably
+    // not useful: objects should only be stored by handle since they might be
+    // removed and the handle reused by someone else. However, having pages
+    // would make it possible to free pages that have all their handles
+    // exhausted.
+    PageArray<T> m_pages;
     uint32_t m_minimum_queue_handles{0};
-    // Having a single allocation that's resized makes accessing elements
-    // simple, but will make it impossible to free dead chunks of memory within
-    // the allocation (except from the start).
-    // Allocating standard sized pages would make freeing entire pages possible
-    // Page allocation would also make pointers stable, though the added value
-    // of stable pointers is a bit dubious since their generation might change
-    // between accesses, effectively invalidating them anyway.
-    T *m_data{nullptr};
-    uint32_t *m_generations{nullptr};
     FreeList m_freelist;
     uint32_t m_dead_indices{0};
 };
@@ -393,71 +387,48 @@ template <typename T> void PageArray<T>::destroy()
 
 template <typename T>
 SlotMap<T>::SlotMap(
-    uint32_t initial_capacity, uint32_t minimum_available_handles)
-: m_handle_count{initial_capacity}
+    PowerOfTwo items_in_page, uint32_t minimum_available_handles)
+: m_pages{items_in_page}
 , m_minimum_queue_handles{minimum_available_handles}
 {
-    assert(m_handle_count > 0);
     assert(
-        m_handle_count > m_minimum_queue_handles &&
-        "Having less initial handles than the "
-        "minimum available count causes extra "
-        "allocations");
-    m_data = reinterpret_cast<T *>(std::malloc(sizeof(T) * m_handle_count));
-    assert(m_data != nullptr);
-    m_generations = reinterpret_cast<uint32_t *>(
-        std::calloc(m_handle_count, sizeof(uint32_t)));
-    assert(m_generations != nullptr);
+        asNumber(items_in_page) > m_minimum_queue_handles &&
+        "Having less items in a page than the minimum available handle count "
+        "causes extra allocations");
 
-    for (auto i = 0u; i < m_handle_count; ++i)
+    for (auto i = 0u; i < m_pages.itemsInPage(); ++i)
         m_freelist.push(i);
 }
 
-template <typename T> SlotMap<T>::~SlotMap() { destroy(); }
-
 template <typename T>
 SlotMap<T>::SlotMap(SlotMap<T> &&other)
-: m_handle_count{other.m_handle_count}
+: m_pages{std::move(other.m_pages)}
 , m_minimum_queue_handles{other.m_minimum_queue_handles}
-, m_data{other.m_data}
-, m_generations{other.m_generations}
 , m_freelist{std::move(other.m_freelist)}
 , m_dead_indices{other.m_dead_indices}
 {
-    other.m_data = nullptr;
-    other.m_generations = nullptr;
 }
 
 template <typename T> SlotMap<T> &SlotMap<T>::operator=(SlotMap<T> &&other)
 {
     if (this != &other)
     {
-        destroy();
-
-        m_handle_count = other.m_handle_count;
+        m_pages = std::move(other.m_pages);
         m_minimum_queue_handles = other.m_minimum_queue_handles;
-        m_data = other.m_data;
-        m_generations = other.m_generations;
         m_freelist = std::move(other.m_freelist);
         m_dead_indices = other.m_dead_indices;
-
-        other.m_data = nullptr;
-        other.m_generations = nullptr;
     }
     return *this;
 }
 
 template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
 {
-    if (needNewHandles())
-        resize();
+    auto index = getFreeIndex();
+    auto stored_item = m_pages[index];
 
-    auto index = m_freelist.pop();
-    assert(index < m_handle_count);
+    new (stored_item.ptr) T{item};
 
-    new (&m_data[index]) T{item};
-
-    auto h = Handle<T>(index, m_generations[index]);
+    auto h = Handle<T>(index, *stored_item.generation);
     assert(h.isValid());
 
     return h;
@@ -467,15 +438,12 @@ template <typename T>
 template <typename... Args>
 Handle<T> SlotMap<T>::emplace(Args const &...args)
 {
-    if (needNewHandles())
-        resize();
+    auto index = getFreeIndex();
+    auto item = m_pages[index];
 
-    auto index = m_freelist.pop();
-    assert(index < m_handle_count);
+    new (item.ptr) T{args...};
 
-    new (&m_data[index]) T{args...};
-
-    auto h = Handle<T>(index, m_generations[index]);
+    auto h = Handle<T>(index, *item.generation);
     assert(h.isValid());
 
     return h;
@@ -483,16 +451,15 @@ Handle<T> SlotMap<T>::emplace(Args const &...args)
 
 template <typename T> void SlotMap<T>::remove(Handle<T> handle)
 {
-#ifndef NDEBUG
-    if (!handle.isValid() || handle.m_index > m_handle_count)
-        return;
-#endif // NDEBUG
+    assert(handle.isValid());
 
     auto index = handle.m_index;
+    auto item = m_pages[index];
 
-    m_data[index].~T();
+    item.ptr->~T();
 
-    auto gen = ++m_generations[index];
+    *item.generation += 1;
+    auto gen = *item.generation;
 
     if (gen < Handle<T>::MAX_GENERATIONS)
         m_freelist.push(index);
@@ -502,22 +469,20 @@ template <typename T> void SlotMap<T>::remove(Handle<T> handle)
 
 template <typename T> T *SlotMap<T>::get(Handle<T> handle)
 {
-#ifndef NDEBUG
-    if (!handle.isValid() || handle.m_index > m_handle_count)
-        return nullptr;
-#endif // NDEBUG
+    assert(handle.isValid());
 
     auto index = handle.m_index;
+    auto item = m_pages[index];
 
-    if (handle.m_generation == m_generations[index])
-        return &m_data[index];
+    if (handle.m_generation == *item.generation)
+        return item.ptr;
     else
         return nullptr;
 }
 
 template <typename T> uint32_t SlotMap<T>::capacity() const
 {
-    return m_handle_count;
+    return m_pages.pageCount() * m_pages.itemsInPage();
 }
 
 template <typename T> uint32_t SlotMap<T>::validCount() const
@@ -526,40 +491,23 @@ template <typename T> uint32_t SlotMap<T>::validCount() const
            m_dead_indices;
 }
 
-template <typename T> void SlotMap<T>::destroy()
-{
-    std::free(m_data);
-    std::free(m_generations);
-}
-
-template <typename T> bool SlotMap<T>::needNewHandles()
+template <typename T> uint32_t SlotMap<T>::getFreeIndex()
 {
     // Pick a minimum number of handles in freelist to avoid burning through
     // them in worst case insert/remove patterns
     // https://twitter.com/dotstdy/status/1536629439961763842?s=20&t=IGuxyH4zxjkunDESRHAXDg
-    return m_freelist.size() < m_minimum_queue_handles;
-}
+    if (m_freelist.size() < m_minimum_queue_handles)
+    {
+        m_pages.allocateNewPage();
 
-template <typename T> void SlotMap<T>::resize()
-{
-    auto old_handle_count = m_handle_count;
-    m_handle_count *= SLOTMAP_RESIZE_MULTIPLIER;
-    assert(m_handle_count <= Handle<T>::MAX_HANDLES);
+        const auto previous_count =
+            (m_pages.pageCount() - 1) * m_pages.itemsInPage();
+        const auto new_count = m_pages.pageCount() * m_pages.itemsInPage();
+        for (auto i = previous_count; i < new_count; ++i)
+            m_freelist.push(i);
+    }
 
-    m_data =
-        reinterpret_cast<T *>(std::realloc(m_data, sizeof(T) * m_handle_count));
-    assert(m_data != nullptr);
-
-    m_generations = reinterpret_cast<uint32_t *>(
-        std::realloc(m_generations, sizeof(uint32_t) * m_handle_count));
-    assert(m_generations != nullptr);
-
-    std::memset(
-        m_generations + old_handle_count, 0x0,
-        sizeof(uint32_t) * (m_handle_count - old_handle_count));
-
-    for (auto i = old_handle_count; i < m_handle_count; ++i)
-        m_freelist.push(i);
+    return m_freelist.pop();
 }
 
 #endif // SLOTMAP_HPP

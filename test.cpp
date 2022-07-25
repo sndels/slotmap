@@ -4,12 +4,14 @@
 
 #include <vector>
 
-static const uint32_t SLOTMAP_INITIAL_SIZE = 16;
+static const PowerOfTwo SLOTMAP_INITIAL_SIZE_POW = PowerOfTwo::e16;
+static const uint32_t SLOTMAP_INITIAL_SIZE = asNumber(SLOTMAP_INITIAL_SIZE_POW);
 static const uint32_t SLOTMAP_MIN_AVAILABLE_HANDLES = 8;
 
 TEST_CASE("Primitive (insert)", "[test]")
 {
-    SlotMap<uint32_t> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<uint32_t> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     SECTION("Insert")
     {
@@ -60,7 +62,8 @@ TEST_CASE("Struct", "[test]")
         uint32_t data1;
     };
 
-    SlotMap<Struct> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<Struct> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     SECTION("Insert")
     {
@@ -126,7 +129,8 @@ TEST_CASE("Aligned struct", "[test]")
     };
     REQUIRE(alignof(Struct) == 16);
 
-    SlotMap<Struct> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<Struct> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     SECTION("Insert")
     {
@@ -204,7 +208,8 @@ TEST_CASE("Remove dtor", "[test]")
         uint32_t *data;
     };
 
-    SlotMap<Struct> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<Struct> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     uint32_t data = 0xDEADCAFE;
 
@@ -233,38 +238,38 @@ TEST_CASE("Remove dtor", "[test]")
 
 TEST_CASE("Move ctor", "[test]")
 {
-    const auto capacity = SLOTMAP_INITIAL_SIZE * 2;
-    const auto min_available = capacity / 2;
-    SlotMap<uint32_t> map{capacity, min_available};
+    SlotMap<uint32_t> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     auto h = map.insert(0xDEADCAFE);
 
     SlotMap<uint32_t> map_copy{std::move(map)};
 
-    REQUIRE(map_copy.capacity() == capacity);
+    REQUIRE(map_copy.capacity() == SLOTMAP_INITIAL_SIZE);
     REQUIRE(*map_copy.get(h) == 0xDEADCAFE);
     REQUIRE_NOTHROW(map_copy.remove(h));
 }
 
 TEST_CASE("Move assign", "[test]")
 {
-    const auto capacity = SLOTMAP_INITIAL_SIZE * 2;
-    const auto min_available = capacity / 2;
+    const auto capacity = PowerOfTwo::e16;
+    const auto min_available = 4;
     SlotMap<uint32_t> map{capacity, min_available};
 
     auto h = map.insert(0xDEADCAFE);
 
-    SlotMap<uint32_t> map_copy{2, 1};
+    SlotMap<uint32_t> map_copy{PowerOfTwo::e512, 1};
     map_copy = std::move(map);
 
-    REQUIRE(map_copy.capacity() == capacity);
+    REQUIRE(map_copy.capacity() == asNumber(capacity));
     REQUIRE(*map_copy.get(h) == 0xDEADCAFE);
     REQUIRE_NOTHROW(map_copy.remove(h));
 }
 
 TEST_CASE("Stale handle", "[test]")
 {
-    SlotMap<uint32_t> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<uint32_t> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     SECTION("Insert")
     {
@@ -337,7 +342,8 @@ TEST_CASE("Stale handle", "[test]")
 
 TEST_CASE("Size methods", "[test]")
 {
-    SlotMap<uint32_t> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<uint32_t> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
     REQUIRE(map.capacity() == SLOTMAP_INITIAL_SIZE);
     REQUIRE(map.validCount() == 0);
 
@@ -366,7 +372,8 @@ TEST_CASE("Size methods", "[test]")
 
 TEST_CASE("Dead handle size methods", "[test]")
 {
-    SlotMap<uint32_t> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<uint32_t> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     SECTION("Insert")
     {
@@ -421,7 +428,8 @@ TEST_CASE("Dead handle size methods", "[test]")
 
 TEST_CASE("Reallocation behavior", "[test]")
 {
-    SlotMap<uint32_t> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<uint32_t> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     SECTION("Insert")
     {
@@ -471,7 +479,8 @@ TEST_CASE("Handle equality", "[test]")
     // Null handles should match
     REQUIRE(Handle<uint32_t>() == Handle<uint32_t>());
 
-    SlotMap<uint32_t> map{SLOTMAP_INITIAL_SIZE, SLOTMAP_MIN_AVAILABLE_HANDLES};
+    SlotMap<uint32_t> map{
+        SLOTMAP_INITIAL_SIZE_POW, SLOTMAP_MIN_AVAILABLE_HANDLES};
 
     SECTION("Insert")
     {
