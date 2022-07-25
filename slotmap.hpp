@@ -66,6 +66,8 @@ class FreeList
     size_t size() const;
 
   private:
+    void destroy();
+
     uint32_t *m_buffer{nullptr};
     size_t m_capacity{0};
     uint32_t m_head{0};
@@ -109,6 +111,7 @@ template <typename T> class SlotMap
     uint32_t validCount() const;
 
   private:
+    void destroy();
     bool needNewHandles();
     void resize();
 
@@ -135,7 +138,7 @@ inline FreeList::FreeList(uint32_t initial_capacity)
     assert(m_buffer != nullptr);
 }
 
-inline FreeList::~FreeList() { std::free(m_buffer); }
+inline FreeList::~FreeList() { destroy(); }
 
 inline FreeList::FreeList(FreeList &&other)
 {
@@ -151,6 +154,8 @@ inline FreeList &FreeList::operator=(FreeList &&other)
 {
     if (this != &other)
     {
+        destroy();
+
         m_buffer = other.m_buffer;
         m_capacity = other.m_capacity;
         m_head = other.m_head;
@@ -224,6 +229,7 @@ inline size_t FreeList::size() const
         return m_tail - m_head;
 }
 
+inline void FreeList::destroy() { std::free(m_buffer); }
 template <typename T>
 SlotMap<T>::SlotMap(
     uint32_t initial_capacity, uint32_t minimum_available_handles)
@@ -246,11 +252,7 @@ SlotMap<T>::SlotMap(
         m_freelist.push(i);
 }
 
-template <typename T> SlotMap<T>::~SlotMap()
-{
-    std::free(m_data);
-    std::free(m_generations);
-}
+template <typename T> SlotMap<T>::~SlotMap() { destroy(); }
 
 template <typename T>
 SlotMap<T>::SlotMap(SlotMap<T> &&other)
@@ -269,6 +271,8 @@ template <typename T> SlotMap<T> &SlotMap<T>::operator=(SlotMap<T> &&other)
 {
     if (this != &other)
     {
+        destroy();
+
         m_handle_count = other.m_handle_count;
         m_minimum_queue_handles = other.m_minimum_queue_handles;
         m_data = other.m_data;
@@ -359,6 +363,12 @@ template <typename T> uint32_t SlotMap<T>::validCount() const
 {
     return capacity() - static_cast<uint32_t>(m_freelist.size()) -
            m_dead_indices;
+}
+
+template <typename T> void SlotMap<T>::destroy()
+{
+    std::free(m_data);
+    std::free(m_generations);
 }
 
 template <typename T> bool SlotMap<T>::needNewHandles()
