@@ -74,6 +74,57 @@ class FreeList
     uint32_t m_tail{0};
 };
 
+enum class PowerOfTwo : uint32_t
+{
+    e16 = 4,
+    e512 = 9,
+    e1024 = 10,
+    e2048 = 11,
+    e4096 = 12,
+    e8128 = 13,
+    e16384 = 14,
+};
+
+// Returns 2^power
+inline uint32_t asNumber(PowerOfTwo power)
+{
+    return 1 << static_cast<uint32_t>(power);
+}
+
+template <typename T> class PageArray
+{
+  public:
+    struct Item
+    {
+        T *ptr{nullptr};
+        uint32_t *generation{nullptr};
+    };
+
+    PageArray(PowerOfTwo items_in_page = PowerOfTwo::e1024);
+    ~PageArray();
+
+    PageArray(PageArray const &other) = delete;
+    PageArray &operator=(PageArray const &other) = delete;
+    PageArray(PageArray &&other);
+    PageArray &operator=(PageArray &&other);
+
+    uint32_t pageCount() const;
+    uint32_t itemsInPage() const;
+
+    Item operator[](uint32_t index);
+
+    void allocateNewPage();
+
+  private:
+    void destroy();
+
+    T **m_item_pages{nullptr};
+    uint32_t **m_generation_pages{nullptr};
+    PowerOfTwo m_items_in_page{PowerOfTwo::e1024};
+    uint32_t m_allocated_page_count{0};
+    uint32_t m_held_page_count{0};
+};
+
 template <typename T> class SlotMap
 {
   public:
@@ -230,6 +281,116 @@ inline size_t FreeList::size() const
 }
 
 inline void FreeList::destroy() { std::free(m_buffer); }
+
+template <typename T>
+PageArray<T>::PageArray(PowerOfTwo items_in_page)
+: m_items_in_page{items_in_page}
+{
+    allocateNewPage();
+}
+
+template <typename T> PageArray<T>::~PageArray() { destroy(); }
+
+template <typename T>
+PageArray<T>::PageArray(PageArray<T> &&other)
+: m_item_pages{other.m_item_pages}
+, m_generation_pages{other.m_generation_pages}
+, m_items_in_page{other.m_items_in_page}
+, m_allocated_page_count{other.m_allocated_page_count}
+, m_held_page_count{other.m_held_page_count}
+{
+    other.m_item_pages = nullptr;
+    other.m_generation_pages = nullptr;
+    other.m_allocated_page_count = 0;
+    other.m_held_page_count = 0;
+}
+
+template <typename T>
+PageArray<T> &PageArray<T>::operator=(PageArray<T> &&other)
+{
+    if (this != &other)
+    {
+        destroy();
+
+        m_item_pages = other.m_item_pages;
+        m_generation_pages = other.m_generation_pages;
+        m_items_in_page = other.m_items_in_page;
+        m_allocated_page_count = other.m_allocated_page_count;
+        m_held_page_count = other.m_held_page_count;
+
+        other.m_item_pages = nullptr;
+        other.m_generation_pages = nullptr;
+        other.m_allocated_page_count = 0;
+        other.m_held_page_count = 0;
+    }
+    return *this;
+}
+
+template <typename T> uint32_t PageArray<T>::pageCount() const
+{
+    return m_held_page_count;
+}
+
+template <typename T> uint32_t PageArray<T>::itemsInPage() const
+{
+    return asNumber(m_items_in_page);
+}
+
+template <typename T>
+typename PageArray<T>::Item PageArray<T>::operator[](uint32_t index)
+{
+    auto page = index >> static_cast<uint32_t>(m_items_in_page);
+    assert(page < m_held_page_count);
+    auto item = index & ~(0xFFFFFFFF << static_cast<uint32_t>(m_items_in_page));
+    assert(item < asNumber(m_items_in_page));
+
+    return Item{
+        .ptr = &m_item_pages[page][item],
+        .generation = &m_generation_pages[page][item],
+    };
+}
+
+template <typename T> void PageArray<T>::allocateNewPage()
+{
+    if (m_held_page_count == m_allocated_page_count)
+    {
+        if (m_allocated_page_count == 0)
+            m_allocated_page_count += 1;
+
+        m_allocated_page_count *= SLOTMAP_RESIZE_MULTIPLIER;
+        m_item_pages = reinterpret_cast<T **>(
+            std::realloc(m_item_pages, m_allocated_page_count * sizeof(T *)));
+        assert(m_item_pages != nullptr);
+        m_generation_pages = reinterpret_cast<uint32_t **>(std::realloc(
+            m_generation_pages, m_allocated_page_count * sizeof(uint32_t *)));
+        assert(m_generation_pages != nullptr);
+    }
+
+    const auto items_in_page = asNumber(m_items_in_page);
+
+    m_item_pages[m_held_page_count] =
+        reinterpret_cast<T *>(std::malloc(items_in_page * sizeof(T)));
+
+    m_generation_pages[m_held_page_count] = reinterpret_cast<uint32_t *>(
+        std::malloc(items_in_page * sizeof(uint32_t)));
+    std::memset(
+        m_generation_pages[m_held_page_count], 0x0,
+        items_in_page * sizeof(uint32_t));
+
+    m_held_page_count++;
+}
+
+template <typename T> void PageArray<T>::destroy()
+{
+    for (auto i = 0u; i < m_held_page_count; ++i)
+    {
+        std::free(m_item_pages[i]);
+        std::free(m_generation_pages[i]);
+    }
+    std::free(m_item_pages);
+    std::free(m_generation_pages);
+}
+
 template <typename T>
 SlotMap<T>::SlotMap(
     uint32_t initial_capacity, uint32_t minimum_available_handles)

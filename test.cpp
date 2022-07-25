@@ -598,3 +598,25 @@ TEST_CASE("FreeList resize", "[test]")
         REQUIRE(list.empty());
     }
 }
+
+TEST_CASE("PageArray", "[test]")
+{
+    PageArray<uint32_t> array{PowerOfTwo::e512};
+    REQUIRE(array.itemsInPage() == asNumber(PowerOfTwo::e512));
+
+    for (auto i = 0u; i < 10; ++i)
+    {
+        REQUIRE(array.pageCount() == i + 1);
+        uint32_t index = i << static_cast<uint32_t>(PowerOfTwo::e512) | i;
+        *array[index].ptr = i;
+        *array[index].generation = 0xFFFFFFFF - i;
+        array.allocateNewPage();
+    }
+
+    for (auto i = 0u; i < 10; ++i)
+    {
+        uint32_t index = i << static_cast<uint32_t>(PowerOfTwo::e512) | i;
+        REQUIRE(*array[index].ptr == i);
+        REQUIRE(*array[index].generation == 0xFFFFFFFF - i);
+    }
+}
