@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <queue>
 
 #define SLOTMAP_RESIZE_MULTIPLIER 2
 
@@ -124,11 +123,7 @@ template <typename T> class SlotMap
     // between accesses, effectively invalidating them anyway.
     T *m_data{nullptr};
     uint32_t *m_generations{nullptr};
-    // TODO
-    // Could avoid dependency to queue here pretty easily. We only need a
-    // uint32_t queue with queryable size. Could maybe even use a ring buffer as
-    // the size of the freelist would be at most that of the generations array.
-    std::queue<uint32_t> m_freelist;
+    FreeList m_freelist;
     uint32_t m_dead_indices{0};
 };
 
@@ -292,8 +287,7 @@ template <typename T> Handle<T> SlotMap<T>::insert(T const &item)
     if (needNewHandles())
         resize();
 
-    auto index = m_freelist.front();
-    m_freelist.pop();
+    auto index = m_freelist.pop();
     assert(index < m_handle_count);
 
     new (&m_data[index]) T{item};
@@ -311,8 +305,7 @@ Handle<T> SlotMap<T>::emplace(Args const &...args)
     if (needNewHandles())
         resize();
 
-    auto index = m_freelist.front();
-    m_freelist.pop();
+    auto index = m_freelist.pop();
     assert(index < m_handle_count);
 
     new (&m_data[index]) T{args...};
