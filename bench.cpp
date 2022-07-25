@@ -9,15 +9,12 @@
 #include <unordered_map>
 #include <vector>
 
-static std::atomic<uint64_t> side_effect = 0;
-
 class Obj
 {
   public:
-    static const size_t DATA_BYTES = 2048;
+    static const size_t DATA_BYTES = 256;
 
     Obj(uint8_t v) { std::memset(m_data, v, DATA_BYTES); }
-    ~Obj() { side_effect++; }
 
   private:
     uint8_t m_data[DATA_BYTES];
@@ -25,13 +22,12 @@ class Obj
 
 TEST_CASE("Bench", "[bench]")
 {
-    const uint32_t object_count = GENERATE(256, 1024, 4096, 16384, 65536);
+    // SlotMap won't reallocate during the first but will during the rest
+    const uint32_t object_count = GENERATE(512, 2048, 8096, 65536);
 
     SECTION("SlotMap")
     {
         WARN("Object count " << object_count);
-
-        BENCHMARK("Create uint32_t") { return SlotMap<uint32_t>{}; };
 
         BENCHMARK_ADVANCED("insert uint32_t")
         (Catch::Benchmark::Chronometer meter)
@@ -50,8 +46,7 @@ TEST_CASE("Bench", "[bench]")
                     for (auto j = 0u; j < object_count; ++j)
                         handles[i].push_back(maps[i].insert(j));
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
         BENCHMARK_ADVANCED("re-insert uint32_t")
@@ -83,8 +78,33 @@ TEST_CASE("Bench", "[bench]")
                         handles[i].push_back(maps[i].insert(j));
                 });
 
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
+        };
+
+        BENCHMARK_ADVANCED("access uint32_t")
+        (Catch::Benchmark::Chronometer meter)
+        {
+            std::vector<SlotMap<uint32_t>> maps;
+            maps.resize(meter.runs());
+
+            std::vector<std::vector<Handle<uint32_t>>> handles;
+            handles.resize(meter.runs());
+            for (auto &h : handles)
+                h.reserve(object_count);
+
+            for (auto i = 0u; i < static_cast<uint32_t>(meter.runs()); ++i)
+                for (auto j = 0u; j < object_count; ++j)
+                    handles[i].push_back(maps[i].insert(j));
+
+            std::vector<uint32_t> sums(meter.runs(), 0);
+            meter.measure(
+                [&](int i)
+                {
+                    for (auto j = 0u; j < object_count; ++j)
+                        sums[i] += *maps[i].get(handles[i][j]);
+                });
+
+            return sums;
         };
 
         BENCHMARK_ADVANCED("remove uint32_t")
@@ -108,11 +128,10 @@ TEST_CASE("Bench", "[bench]")
                     for (auto j = 0u; j < object_count; ++j)
                         maps[i].remove(handles[i][j]);
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
-        BENCHMARK_ADVANCED("insert 2k object")
+        BENCHMARK_ADVANCED("insert 256B object")
         (Catch::Benchmark::Chronometer meter)
         {
             std::vector<SlotMap<Obj>> maps;
@@ -130,11 +149,10 @@ TEST_CASE("Bench", "[bench]")
                         handles[i].push_back(maps[i].insert(
                             Obj{static_cast<uint8_t>(j & 0xFF)}));
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
-        BENCHMARK_ADVANCED("emplace 2k object")
+        BENCHMARK_ADVANCED("emplace 256B object")
         (Catch::Benchmark::Chronometer meter)
         {
             std::vector<SlotMap<Obj>> maps;
@@ -152,11 +170,10 @@ TEST_CASE("Bench", "[bench]")
                         handles[i].push_back(
                             maps[i].emplace(static_cast<uint8_t>(j & 0xFF)));
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
-        BENCHMARK_ADVANCED("remove 2k object")
+        BENCHMARK_ADVANCED("remove 256B object")
         (Catch::Benchmark::Chronometer meter)
         {
             std::vector<SlotMap<Obj>> maps;
@@ -178,19 +195,13 @@ TEST_CASE("Bench", "[bench]")
                     for (auto j = 0u; j < object_count; ++j)
                         maps[i].remove(handles[i][j]);
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
     }
 
     SECTION("std::unordered_map")
     {
         WARN("Object count " << object_count);
-
-        BENCHMARK("Create uint32_t")
-        {
-            return std::unordered_map<uint32_t, uint32_t>{};
-        };
 
         BENCHMARK_ADVANCED("insert uint32_t")
         (Catch::Benchmark::Chronometer meter)
@@ -212,8 +223,7 @@ TEST_CASE("Bench", "[bench]")
                         handles[i].push_back(j);
                     }
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
         BENCHMARK_ADVANCED("re-insert uint32_t")
@@ -251,8 +261,36 @@ TEST_CASE("Bench", "[bench]")
                     }
                 });
 
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
+        };
+
+        BENCHMARK_ADVANCED("access uint32_t")
+        (Catch::Benchmark::Chronometer meter)
+        {
+            std::vector<std::unordered_map<uint32_t, uint32_t>> maps;
+            maps.resize(meter.runs());
+
+            std::vector<std::vector<uint32_t>> handles;
+            handles.resize(meter.runs());
+            for (auto &h : handles)
+                h.reserve(object_count);
+
+            for (auto i = 0u; i < static_cast<uint32_t>(meter.runs()); ++i)
+                for (auto j = 0u; j < object_count; ++j)
+                {
+                    maps[i].insert(std::make_pair(j, j));
+                    handles[i].push_back(j);
+                }
+
+            std::vector<uint32_t> sums(meter.runs(), 0);
+            meter.measure(
+                [&](int i)
+                {
+                    for (auto j = 0u; j < object_count; ++j)
+                        sums[i] += maps[i][handles[i][j]];
+                });
+
+            return sums;
         };
 
         BENCHMARK_ADVANCED("remove uint32_t")
@@ -279,11 +317,10 @@ TEST_CASE("Bench", "[bench]")
                     for (auto j = 0u; j < object_count; ++j)
                         maps[i].erase(handles[i][j]);
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
-        BENCHMARK_ADVANCED("insert 2k object")
+        BENCHMARK_ADVANCED("insert 256B object")
         (Catch::Benchmark::Chronometer meter)
         {
             std::vector<std::unordered_map<uint32_t, Obj>> maps;
@@ -304,11 +341,10 @@ TEST_CASE("Bench", "[bench]")
                         handles[i].push_back(j);
                     }
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
-        BENCHMARK_ADVANCED("emplace 2k object")
+        BENCHMARK_ADVANCED("emplace 256B object")
         (Catch::Benchmark::Chronometer meter)
         {
             std::vector<std::unordered_map<uint32_t, Obj>> maps;
@@ -328,11 +364,10 @@ TEST_CASE("Bench", "[bench]")
                         handles[i].push_back(j);
                     }
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
 
-        BENCHMARK_ADVANCED("remove 2k object")
+        BENCHMARK_ADVANCED("remove 256B object")
         (Catch::Benchmark::Chronometer meter)
         {
             std::vector<std::unordered_map<uint32_t, Obj>> maps;
@@ -357,8 +392,7 @@ TEST_CASE("Bench", "[bench]")
                     for (auto j = 0u; j < object_count; ++j)
                         maps[i].erase(handles[i][j]);
                 });
-            return std::make_tuple(
-                std::move(handles), std::move(maps), side_effect.load());
+            return std::make_tuple(std::move(handles), std::move(maps));
         };
     }
 }
