@@ -40,7 +40,7 @@ template <typename T> class Handle
         return m_index < MAX_HANDLES && m_generation < MAX_GENERATIONS;
     }
 
-    // The default index of 0 is not a valid handle
+    // The default index of MAX_HANDLES is not a valid handle
     uint32_t m_index : 24 {MAX_HANDLES};
     // Value of MAX_GENERATIONS marks an exhausted handle
     uint32_t m_generation : 8 {MAX_GENERATIONS};
